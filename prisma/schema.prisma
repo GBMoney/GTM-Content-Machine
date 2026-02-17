@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole { OWNER ADMIN EDITOR VIEWER }
+enum PlanName { CREATOR PRO AGENCY }
+enum ApprovalStatus { PENDING APPROVED REJECTED }
+
+model User {
+  id               String            @id @default(cuid())
+  email            String            @unique
+  passwordHash     String?
+  name             String?
+  createdAt        DateTime          @default(now())
+  memberships      WorkspaceMember[]
+  ideas            Idea[]
+  drafts           DraftPost[]
+  aiUsageEvents    AIUsageEvent[]
+}
+
+model Workspace {
+  id               String            @id @default(cuid())
+  name             String
+  createdAt        DateTime          @default(now())
+  members          WorkspaceMember[]
+  clients          Client[]
+  subscriptions    Subscription[]
+  ideas            Idea[]
+  viralPosts       ViralPost[]
+  drafts           DraftPost[]
+  scheduledPosts   ScheduledPost[]
+  publishedPosts   PublishedPost[]
+  engagementLists  EngagementList[]
+  brandKits        BrandKit[]
+  auditLogs        AuditLog[]
+}
+
+model WorkspaceMember {
+  id           String        @id @default(cuid())
+  userId       String
+  workspaceId  String
+  role         WorkspaceRole
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([userId, workspaceId])
+}
+
+model Subscription {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  stripeCustomerId    String?
+  stripeSubscriptionId String?
+  plan                PlanName
+  status              String
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Client {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  name          String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  linkedInConnections LinkedInConnection[]
+  brandKit      BrandKit?
+  approvals     Approval[]
+}
+
+model LinkedInConnection {
+  id                String   @id @default(cuid())
+  clientId          String?
+  workspaceId       String?
+  accountUrn        String
+  encryptedToken    String
+  refreshToken      String?
+  scopes            String[]
+  client            Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model BrandKit {
+  id            String     @id @default(cuid())
+  workspaceId   String?
+  clientId      String?    @unique
+  logoUrl       String?
+  primaryHex    String?
+  toneNotes     String?
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client        Client?    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model VoiceProfile { id String @id @default(cuid()) workspaceId String stylePrompt String }
+
+model Idea {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  userId       String
+  title        String
+  content      String
+  tags         IdeaTag[]
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model IdeaTag { id String @id @default(cuid()) ideaId String label String idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade) }
+model ViralPost { id String @id @default(cuid()) workspaceId String content String tags String[] score Int workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)}
+
+model DraftPost {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  authorId      String
+  clientId      String?
+  content       String
+  score         Int?
+  status        String   @default("DRAFT")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author        User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model ScheduledPost { id String @id @default(cuid()) workspaceId String draftPostId String scheduledFor DateTime firstComment String? status String @default("QUEUED") workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)}
+model PublishedPost { id String @id @default(cuid()) workspaceId String draftPostId String linkedInPostId String publishedAt DateTime @default(now()) workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)}
+model Approval { id String @id @default(cuid()) clientId String draftPostId String status ApprovalStatus @default(PENDING) comment String? client Client @relation(fields:[clientId], references:[id], onDelete: Cascade)}
+model PostMetricSnapshot { id String @id @default(cuid()) publishedPostId String impressions Int clicks Int likes Int comments Int engagementRate Float collectedAt DateTime @default(now()) }
+model Carousel { id String @id @default(cuid()) workspaceId String title String slides Json exportPdfUrl String? createdAt DateTime @default(now()) }
+model EngagementList { id String @id @default(cuid()) workspaceId String name String targets EngagementTarget[] workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)}
+model EngagementTarget { id String @id @default(cuid()) engagementListId String linkedInProfileUrl String score Int? engagementList EngagementList @relation(fields: [engagementListId], references: [id], onDelete: Cascade)}
+model AIUsageEvent { id String @id @default(cuid()) userId String task String tokens Int costUsd Float createdAt DateTime @default(now()) user User @relation(fields: [userId], references: [id], onDelete: Cascade)}
+model AuditLog { id String @id @default(cuid()) workspaceId String actorId String action String meta Json? createdAt DateTime @default(now()) workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)}
